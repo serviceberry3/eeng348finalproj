@@ -1,12 +1,16 @@
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 
-SoftwareSerial HC12(10, 11); // HC-12 TX Pin, HC-12 RX Pin
+SoftwareSerial HC12(10, 11); //HC-12 TX Pin, HC-12 RX Pin
 int LED = 3;
 LiquidCrystal_I2C lcd(0x27,20,4);
 
-//#define push1 8
-//#define push2 7
+enum state {
+  LETTER,
+  LAT,
+  LON
+};
+
 const String A = ".-", B = "-...", C = "-.-.", D = "-..",
              E = ".", F = "..-.", G = "--.", H = "....",
              I = "..", J = ".---", K = "-.-", L = ".-..",
@@ -14,91 +18,91 @@ const String A = ".-", B = "-...", C = "-.-.", D = "-..",
              Q = "--.-", R = ".-.", S = "...", T = "-",
              U = "..-", V = "...-", W = ".--", X = "-..-",
              Y = "-.--", Z = "--..";
-String morse_letter = "";
-String message = "";             
+             
+String morse_letter = "";         
 int delay_time = 500;
-//void morse_dot;
-//void morse_dash;
 const unsigned long time_threshold = 250;
-//char space = "/";
 int debounce_delay = 50;
 
+String lat = "";
+String lon = "";
+
+state reader = LETTER;
+
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(9600);
   HC12.begin(9600); 
-  //pinMode(push1, INPUT);
-  //pinMode(push2, INPUT);
-  pinMode(LED,OUTPUT);
-  //lcd.init();                      // initialize the lcd
-  //lcd.backlight();
-  Serial.println("Start");
-  
+  lcd.init();              
+  lcd.backlight();
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
-  digitalWrite(LED, HIGH);
-  //Serial.println("1");
- 
-  while (HC12.available()) {        // If HC-12 has data
-    //Serial.println("2");
+void loop() { 
+  while (HC12.available()) {
     char val = HC12.read();
-    Serial.println(val);
-    Serial.println(int(val));
-    morse_letter += val;
-    //analogWrite(LED,val);
-    if (int(val)==1){
-      Serial.print("Sending");
-      Serial.println(morse_letter);
-      message += morse_to_letter(morse_letter);
-      Serial.println(message);
-      morse_letter = "";
-    }
-  }
-/*
-  int state1, state2;
-  static int last_state1, last_state2;
-  static float start_time1, end_time1, time1;
-  state1 = digitalRead(push1);
-  state2 = digitalRead(push2);
- 
-  if(state1 == HIGH && last_state1 == LOW){
-    start_time1 = millis();
-  }
-  else if(state1 == LOW && last_state1 == HIGH){
-    end_time1 = millis();
-    time1 = end_time1 - start_time1;
-    if (time1 < time_threshold){
-      morse_letter += ".";
-      Serial.println(morse_letter);
-    }
-   
-    else {
-      morse_letter += "-";
-      Serial.println(morse_letter);
-    }
-  }
-  if (state2 == HIGH){
-    message += morse_to_letter(morse_letter);
-    Serial.println(morse_letter);
-    Serial.println(message);
-    morse_letter = "";
-    delay(delay_time);
-    lcd.clear();
-    lcd.print(message);
-  }
-  last_state1 = state1;
-  last_state2 = state2;
 
-  */
-  
+    switch(reader) {
+      //currently in morse letter reading state
+      case LETTER:
+        //a zero signifies the end of a letter
+        if (int(val) == 1) {
+          Serial.print("Receiving letter: ");
+          char letter = morse_to_letter(morse_letter);
+          
+          if (letter != 0) {
+            lcd.print(letter);
+            Serial.println(letter);
+          }
+          else {
+            Serial.println("UNKNOWN");
+          }
+            
+          morse_letter = "";
+
+          //should now be in latitude reading state
+          reader = LAT;
+        }
+        else if (int(val) == 2 && morse_letter != "") {
+          morse_letter.remove(morse_letter.length() - 1);
+        }
+        //otherwise we're reading the letter, so append dash or dot to the buffer string for current letter being read
+        else {
+          morse_letter += val;
+        }
+        break;
+
+      //currently in location reading state
+      case LAT:
+        //we've read in the location, so print it to display
+        if (int(val) == 1) {
+          Serial.print("Received lat: ");
+          Serial.println(lat);
+          reader = LON;
+          lat = "";
+        }
+        else {
+          lat += val;
+        }
+        break;
+      case LON:
+        //we've read in the location, so print it to display
+        if (int(val) == 1) {
+          Serial.print("Received lon: ");
+          Serial.println(lon);
+          reader = LETTER;
+          lon = "";
+        }
+        else {
+          lon += val;
+        }
+        break;
+    }
+  }  
 }
 
 
 char morse_to_letter(String letter)
 {
-  if(letter == A)      return 'A';
+  if (letter == A)      return 'A';
   else if(letter == B) return 'B';
   else if(letter == C) return 'C';
   else if(letter == D) return 'D';
@@ -124,5 +128,5 @@ char morse_to_letter(String letter)
   else if(letter == X) return 'X';
   else if(letter == Y) return 'Y';
   else if(letter == Z) return 'Z';
-  return ' ';
+  return 0;
 }
