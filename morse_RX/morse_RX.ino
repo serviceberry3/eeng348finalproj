@@ -27,7 +27,15 @@ int debounce_delay = 50;
 String lat = "";
 String lon = "";
 
+int scroll_ctr = 0;
+
 state reader = LETTER;
+
+String msg = "";
+
+int which_data_to_disp = 0;
+
+long data_switch_timer = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -49,7 +57,7 @@ void loop() {
           char letter = morse_to_letter(morse_letter);
           
           if (letter != 0) {
-            lcd.print(letter);
+            msg += letter;
             Serial.println(letter);
           }
           else {
@@ -59,6 +67,7 @@ void loop() {
           morse_letter = "";
 
           //should now be in latitude reading state
+          lat = "";
           reader = LAT;
         }
         else if (int(val) == 2 && morse_letter != "") {
@@ -76,8 +85,8 @@ void loop() {
         if (int(val) == 1) {
           Serial.print("Received lat: ");
           Serial.println(lat);
+          lon = "";
           reader = LON;
-          lat = "";
         }
         else {
           lat += val;
@@ -89,7 +98,6 @@ void loop() {
           Serial.print("Received lon: ");
           Serial.println(lon);
           reader = LETTER;
-          lon = "";
         }
         else {
           lon += val;
@@ -97,8 +105,62 @@ void loop() {
         break;
     }
   }  
+
+
+  if (++data_switch_timer > 5) {
+    which_data_to_disp = 1 - which_data_to_disp;
+    setup_data_labels(which_data_to_disp);
+    data_switch_timer = 0;
+  }
+
+  display_data(which_data_to_disp);
+  delay(600);
 }
 
+void setup_data_labels(int which) {
+  lcd.clear();
+
+  if (which == 0) {
+    lcd.print("MSG:"); 
+  }
+  else {
+    lcd.print("LAT: ");
+    lcd.setCursor(0, 1);
+    lcd.print("LON: ");
+  }
+}
+
+
+void display_data(int which) {
+  if (which == 0) {
+    display_msg();
+  }
+  else {
+    display_loc();
+  }
+}
+
+
+void display_msg() {
+  //check if scrolling is necessary
+  if (msg.length() + 4 > 16) {
+      lcd.scrollDisplayLeft();
+      if (++scroll_ctr == msg.length() + 12) {
+        scroll_ctr = 0;
+        lcd.clear();
+      }
+  }
+  lcd.setCursor(5, 0);
+  lcd.print(msg);
+}
+
+void display_loc() {
+  lcd.setCursor(5, 0);
+  lcd.print(lat);
+  lcd.setCursor(5, 1);
+  lcd.print(lon);
+}
+ 
 
 char morse_to_letter(String letter)
 {
